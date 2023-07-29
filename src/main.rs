@@ -3,7 +3,7 @@
 
 use std::time::Instant;
 
-use log::{debug, error};
+use log::error;
 use num::complex::Complex;
 use pixels::{Error, Pixels, SurfaceTexture};
 use winit::{
@@ -40,9 +40,6 @@ fn main() -> Result<(), Error> {
 
     let mut mandelbrot = MandelbrotGrid::new(WIDTH as usize, HEIGHT as usize);
     mandelbrot.update();
-    let mut paused = false;
-
-    let mut draw_state: Option<bool> = None;
 
     event_loop.run(move |event, _, control_flow| {
         // The one and only event that winit_input_helper doesn't have for us...
@@ -62,53 +59,6 @@ fn main() -> Result<(), Error> {
             if input.key_pressed(VirtualKeyCode::Escape) || input.close_requested() {
                 *control_flow = ControlFlow::Exit;
                 return;
-            }
-            if input.key_pressed(VirtualKeyCode::P) {
-                paused = !paused;
-            }
-            if input.key_pressed_os(VirtualKeyCode::Space) {
-                // Space is frame-step, so ensure we're paused
-                paused = true;
-            }
-            // Handle mouse. This is a bit involved since support some simple
-            // line drawing (mostly because it makes nice looking patterns).
-            let (mouse_cell, mouse_prev_cell) = input
-                .mouse()
-                .map(|(mx, my)| {
-                    let (dx, dy) = input.mouse_diff();
-                    let prev_x = mx - dx;
-                    let prev_y = my - dy;
-
-                    let (mx_i, my_i) = pixels
-                        .window_pos_to_pixel((mx, my))
-                        .unwrap_or_else(|pos| pixels.clamp_pixel_pos(pos));
-
-                    let (px_i, py_i) = pixels
-                        .window_pos_to_pixel((prev_x, prev_y))
-                        .unwrap_or_else(|pos| pixels.clamp_pixel_pos(pos));
-
-                    (
-                        (mx_i as isize, my_i as isize),
-                        (px_i as isize, py_i as isize),
-                    )
-                })
-                .unwrap_or_default();
-
-            if let Some(draw_alive) = draw_state {
-                let release = input.mouse_released(0);
-                let held = input.mouse_held(0);
-                debug!("Draw at {mouse_prev_cell:?} => {mouse_cell:?}");
-                debug!("Mouse held {held:?}, release {release:?}");
-                // If they either released (finishing the drawing) or are still
-                // in the middle of drawing, keep going.
-                if release || held {
-                    debug!("Draw line of {draw_alive:?}");
-                }
-                // If they let go or are otherwise not clicking anymore, stop drawing.
-                if release || !held {
-                    debug!("Draw end");
-                    draw_state = None;
-                }
             }
             // Resize the window
             if let Some(size) = input.window_resized() {
@@ -221,7 +171,6 @@ impl MandelbrotGrid {
                 let y = ((y as f64 - 0.) / (self.height as f64 - 0.)) * (self.max_y - self.min_y)
                     + self.min_y;
                 let steps = get_mondelbrot(x, y);
-                //println!("{} {}, {} {}", old_x, x, old_y, y, steps);
                 self.cells[idx].steps = steps;
                 self.cells[idx].color = steps_to_rgb(steps);
             }
@@ -244,9 +193,6 @@ fn steps_to_rgb(steps: usize) -> Vec<u8> {
         50.,
         norm_steps * 100.,
     );
-    let r = (norm_steps * 255.) as u8;
-    //println!("{} {}", norm_steps, r);
-    //return vec![r, r, r, 255];
     return hsl_to_rgba(hsl.0, hsl.1, hsl.2);
 }
 fn hsl_to_rgba(h: f64, s: f64, l: f64) -> Vec<u8> {
