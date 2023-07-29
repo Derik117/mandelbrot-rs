@@ -1,6 +1,7 @@
 #![deny(clippy::all)]
 #![forbid(unsafe_code)]
 
+use rayon::prelude::*;
 use std::time::Instant;
 
 use log::error;
@@ -163,17 +164,30 @@ impl MandelbrotGrid {
 
     fn update(&mut self) {
         let start_time = Instant::now();
-        for y in 0..self.height {
-            for x in 0..self.width {
+        let heights = 0..self.height;
+        let widths = 0..self.width;
+        let mut prod = vec![];
+        for i in itertools::iproduct!(heights, widths) {
+            prod.push(i);
+        }
+        let res: Vec<(usize, usize, Vec<u8>)> = prod
+            .par_iter()
+            .map(|yx| {
+                let y = yx.0;
+                let x = yx.1;
                 let idx = x + y * self.width;
                 let x = ((x as f64 - 0.) / (self.width as f64 - 0.)) * (self.max_x - self.min_x)
                     + self.min_x;
                 let y = ((y as f64 - 0.) / (self.height as f64 - 0.)) * (self.max_y - self.min_y)
                     + self.min_y;
                 let steps = get_mondelbrot(x, y);
-                self.cells[idx].steps = steps;
-                self.cells[idx].color = steps_to_rgb(steps);
-            }
+                let color = steps_to_rgb(steps);
+                (idx, steps, color)
+            })
+            .collect();
+        for (idx, steps, color) in res {
+            self.cells[idx].steps = steps;
+            self.cells[idx].color = color;
         }
         println!("Update elapsed: {:?}", start_time.elapsed());
     }
@@ -185,7 +199,6 @@ impl MandelbrotGrid {
         }
     }
 }
-
 fn steps_to_rgb(steps: usize) -> Vec<u8> {
     let norm_steps = steps as f64 / MAX_ITERS as f64;
     let hsl = (
